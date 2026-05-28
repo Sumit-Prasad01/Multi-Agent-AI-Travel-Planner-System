@@ -9,3 +9,4 @@ psycopg_pool
 tavily-python
 requests
 streamlit
+langgraph-checkpoint-postgres
