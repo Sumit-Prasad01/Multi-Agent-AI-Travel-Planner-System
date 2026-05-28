@@ -19,7 +19,6 @@ from src.config import settings
 
 llm = ChatGroq(
     model = settings.MODEL,
-    temperature = 0.7
 )
 
 
@@ -116,3 +115,58 @@ def final_agent(state : TravelState):
         "messages" : [response],
         "llm_calls" : state.get("llm_calls", 0) + 1
     }
+
+
+# Build Graph
+graph = StateGraph(TravelState)
+
+# Add nodes
+graph.add_node("flight_agent", flight_agent)
+graph.add_node("hotel_agent", hotel_agent)
+graph.add_node("itinerary_agent", itinerary_agent)
+graph.add_node("final_agent", final_agent)
+
+# Add Edges
+graph.add_edge(START, "flight_agent")
+graph.add_edge("flight_agent", "hotel_agent")
+graph.add_edge("hotel_agent", "itinerary_agent")
+graph.add_edge("itinerary_agent", "final_agent")
+graph.add_edge("final_agent", END)
+
+
+# Persistent connection so both CLI and Streamlit can share the compiled app
+_conn = psycopg.connect(settings.DATABASE_URL)
+checkpointer = PostgresSaver(_conn)
+checkpointer.setup()
+
+
+app = graph.comiple(checkpointer = checkpointer)
+
+
+if __name__ == "__main__":
+    config = {
+        "configurable": {
+            "thread_id": "user_test"
+        }
+    }
+
+    user_input = input("Enter Travel request : ")
+
+    result = app.invoke(
+        {
+             "messages": [
+                HumanMessage(content=user_input)
+            ],
+            "user_query": user_input,
+            "flight_results": "",
+            "hotel_results": "",
+            "itinerary": "",
+            "llm_calls": 0
+        },
+        config = config
+    )
+
+    print("\nFINAL RESPONSE:\n")
+
+    for msg in result["messages"]:
+        print(msg.content)
